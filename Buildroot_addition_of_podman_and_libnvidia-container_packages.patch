@@ -1,0 +1,147 @@
+diff --git a/package/Config.in b/package/Config.in
+index 8dc8b5ed5d..2383c94a82 100644
+--- a/package/Config.in
++++ b/package/Config.in
+@@ -1710,6 +1710,7 @@ menu "Graphics"
+ 	source "package/libvips/Config.in"
+ 	source "package/libvpl/Config.in"
+ 	source "package/libwpe/Config.in"
++	source "package/libnvidia-container/Config.in"
+ 	source "package/menu-cache/Config.in"
+ 	source "package/opencl-clhpp/Config.in"
+ 	source "package/opencv3/Config.in"
+@@ -2346,6 +2347,7 @@ menu "Miscellaneous"
+ endmenu
+ 
+ menu "Networking applications"
++	source "package/podman/Config.in"
+ 	source "package/aircrack-ng/Config.in"
+ 	source "package/alfred/Config.in"
+ 	source "package/aoetools/Config.in"
+diff --git a/package/libnvidia-container/Config.in b/package/libnvidia-container/Config.in
+new file mode 100644
+index 0000000000..e8c412ed8d
+--- /dev/null
++++ b/package/libnvidia-container/Config.in
+@@ -0,0 +1,15 @@
++config BR2_PACKAGE_LIBNVIDIA_CONTAINER
++	bool "libnvidia-container"
++#	depends on BR2_SHARED_LIBS
++#	depends on BR2_TOOLCHAIN_HAS_THREADS # tirpc
++#	depends on BR2_TOOLCHAIN_USES_GLIBC # fexecve
++	select BR2_PACKAGE_ELFUTILS
++	select BR2_PACKAGE_LIBCAP
++	select BR2_PACKAGE_LIBTIRPC
++	select BR2_PACKAGE_NVIDIA_MODPROBE
++	help
++	  The libnvidia-container package adds a library and CLI for
++	  GPU-backed containers, agnostic to container runtime.
++
++	  https://github.com/NVIDIA/libnvidia-container
++
+diff --git a/package/libnvidia-container/libnvidia-container.mk b/package/libnvidia-container/libnvidia-container.mk
+new file mode 100644
+index 0000000000..bb4271fd9d
+--- /dev/null
++++ b/package/libnvidia-container/libnvidia-container.mk
+@@ -0,0 +1,48 @@
++LIBNVIDIA_CONTAINER_VERSION = 1.15.0
++# LIBNVIDIA_CONTAINER_SITE = $(call github,NVIDIA,libnvidia-container,v$(LIBNVIDIA_CONTAINER_VERSION))
++LIBNVIDIA_CONTAINER_SITE = $(TOPDIR)/dl
++LIBNVIDIA_CONTAINER_SOURCE = libnvidia-container-$(LIBNVIDIA_CONTAINER_VERSION).tar.gz
++LIBNVIDIA_CONTAINER_LICENSE = Apache-2.0
++LIBNVIDIA_CONTAINER_LICENSE_FILES = LICENSE
++
++LIBNVIDIA_CONTAINER_DEPENDENCIES = libcap host-pkgconf host-elfutils host-libcap
++
++
++# LIBNVIDIA_CONTAINER_MAKE_OPTS = \
++#	CFLAGS="$(TARGET_CFLAGS) -D_GNU_SOURCE" \
++#	OBJCPY="$(TARGET_OBJCOPY)" \
++#	RPCGEN="$(HOST_DIR)/bin/rpcgen" \
++#	WITH_LIBELF=yes \
++#	WITH_TIRPC=no
++
++ifeq ($(BR2_PACKAGE_LIBSECCOMP),y)
++LIBNVIDIA_CONTAINER_MAKE_OPTS += WITH_SECCOMP=yes
++LIBNVIDIA_CONTAINER_DEPENDENCIES += libseccomp
++else
++LIBNVIDIA_CONTAINER_MAKE_OPTS += WITH_SECCOMP=no
++endif
++
++define LIBNVIDIA_CONTAINER_EXTRACT_CMDS
++    tar -xzf $(LIBNVIDIA_CONTAINER_DL_DIR)/$(LIBNVIDIA_CONTAINER_SOURCE) -C $(BUILD_DIR)
++endef
++
++define LIBNVIDIA_CONTAINER_BUILD_CMDS
++   $(TARGET_MAKE_ENV) GOFLAGS="-buildvcs=false" \
++	CFLAGS="$(TARGET_CFLAGS) -I/output/target/usr/include" \
++	LDFLAGS="$(TARGET_LDFLAGS) -L/output/target/usr/lib" \
++	$(MAKE) -C $(@D) \
++	$(TARGET_CONFIGURE_OPTS) \
++	$(LIBNVIDIA_CONTAINER_MAKE_OPTS) \
++	shared tools
++endef
++
++define LIBNVIDIA_CONTAINER_INSTALL_TARGET_CMDS
++   $(TARGET_MAKE_ENV) $(MAKE) -C $(@D) \
++	$(TARGET_CONFIGURE_OPTS) \
++	$(LIBNVIDIA_CONTAINER_MAKE_OPTS) \
++	install DESTDIR=$(TARGET_DIR)
++endef
++
++
++$(eval $(generic-package))
++
+diff --git a/package/podman/Config.in b/package/podman/Config.in
+new file mode 100644
+index 0000000000..72b973caff
+--- /dev/null
++++ b/package/podman/Config.in
+@@ -0,0 +1,21 @@
++config BR2_PACKAGE_PODMAN
++   bool "podman"
++   depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
++	depends on BR2_TOOLCHAIN_HAS_THREADS
++   select BR2_PACKAGE_CNI_PLUGINS
++   select BR2_PACKAGE_CONMON
++   select BR2_PACKAGE_CRUN
++   select BR2_PACKAGE_RUNC
++   select BR2_PACKAGE_LIBGPG_ERROR
++   select BR2_PACKAGE_LIBASSUAN
++   select BR2_PACKAGE_LIBCAP
++   select BR2_PACKAGE_BTRFS_PROGS
++   select BR2_PACKAGE_IPTABLES
++   select BR2_PACKAGE_LIBSODIUM
++   select BR2_PACKAGE_LIBGCRYPT
++	select BR2_PACKAGE_GNUPG
++	select BR2_PACKAGE_LIBSECCOMP
++	select BR2_PACKAGE_LIBGPGME
++   help
++		Podman is a daemonless container engine for developing,
++		managing, and running OCI Containers on your Linux System.
+diff --git a/package/podman/podman.mk b/package/podman/podman.mk
+new file mode 100644
+index 0000000000..239b412af2
+--- /dev/null
++++ b/package/podman/podman.mk
+@@ -0,0 +1,19 @@
++PODMAN_VERSION = 4.5.0
++PODMAN_SITE = $(call github,containers,podman,v$(PODMAN_VERSION))
++PODMAN_LICENSE = Apache-2.0
++PODMAN_LICENSE_FILES = LICENSE
++PODMAN_CPE_ID_VENDOR = podman_project
++PODMAN_GOMOD = github.com/containers/podman/v4
++PODMAN_DEPENDENCIES = cni-plugins conmon crun runc libgpg-error libassuan libcap btrfs-progs iptables libsodium libgcrypt gnupg
++
++define PODMAN_BUILD_CMDS
++    cd $(@D) && \
++    GOARCH=386 GO386=softfloat CGO_ENABLED=1 CC=$(TARGET_CC) CXX=$(TARGET_CXX) $(MAKE)
++endef
++
++define PODMAN_INSTALL_TARGET_CMDS
++    $(INSTALL) -m 0755 $(@D)/bin/podman $(TARGET_DIR)/usr/bin/podman
++endef
++
++$(eval $(golang-package))
++
